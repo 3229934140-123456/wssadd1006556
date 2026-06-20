@@ -20,6 +20,13 @@ export const batches: Batch[] = [
       label: '分盒卡顿',
       reportedAt: '2026-06-18',
       reportedBy: '广州天河店',
+      assignee: '李督导',
+      deadline: '2026-06-22',
+      status: 'assigned',
+      statusHistory: [
+        { status: 'pending', updatedAt: '2026-06-18', updatedBy: '系统' },
+        { status: 'assigned', updatedAt: '2026-06-19', updatedBy: '王总部', remark: '安排支援' },
+      ],
     },
     stages: [
       { name: '厂家到货', status: 'completed', date: '2026-06-15', duration: 0 },
@@ -47,6 +54,14 @@ export const batches: Batch[] = [
       label: '通知未达',
       reportedAt: '2026-06-16',
       reportedBy: '杭州西湖店',
+      assignee: '杭州客服-陈雅',
+      deadline: '2026-06-21',
+      status: 'processing',
+      statusHistory: [
+        { status: 'pending', updatedAt: '2026-06-16', updatedBy: '系统' },
+        { status: 'assigned', updatedAt: '2026-06-17', updatedBy: '杭州店长' },
+        { status: 'processing', updatedAt: '2026-06-18', updatedBy: '杭州客服-陈雅', remark: '正在逐个联系患者' },
+      ],
     },
     stages: [
       { name: '厂家到货', status: 'completed', date: '2026-06-10', duration: 0 },
@@ -95,6 +110,8 @@ export const batches: Batch[] = [
       label: '患者未取走',
       reportedAt: '2026-06-17',
       reportedBy: '武汉江汉店',
+      status: 'pending',
+      statusHistory: [{ status: 'pending', updatedAt: '2026-06-17', updatedBy: '系统' }],
     },
     stages: [
       { name: '厂家到货', status: 'completed', date: '2026-06-12', duration: 0 },
@@ -122,6 +139,8 @@ export const batches: Batch[] = [
       label: '入柜延迟',
       reportedAt: '2026-06-19',
       reportedBy: '上海浦东店',
+      status: 'pending',
+      statusHistory: [{ status: 'pending', updatedAt: '2026-06-19', updatedBy: '系统' }],
     },
     stages: [
       { name: '厂家到货', status: 'completed', date: '2026-06-17', duration: 0 },

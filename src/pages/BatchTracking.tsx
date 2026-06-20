@@ -1,8 +1,8 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import BatchCard from '@/components/batch-tracking/BatchCard';
 import { batches as initialBatches } from '@/data/batches';
 import { stores } from '@/data/stores';
-import { Batch, BatchAnomaly } from '@/types';
+import { Batch } from '@/types';
 import {
   Package,
   AlertTriangle,
@@ -48,11 +48,11 @@ const anomalyTypeOptions = [
 type TabKey = '' | 'warning' | 'processing' | 'completed' | 'anomaly';
 
 export default function BatchTracking() {
-  const { selectedStoreId, setSelectedStore } = useStore();
+  const { selectedStoreId, setSelectedStore, batchAnomalies } = useStore();
   const [showFilter, setShowFilter] = useState(true);
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('');
-  const [batchData, setBatchData] = useState<Batch[]>(initialBatches);
+  const batchData = initialBatches;
   const [filters, setFilters] = useState<Filters>({
     storeId: '',
     manufacturer: '',
@@ -72,6 +72,7 @@ export default function BatchTracking() {
 
   const baseFilteredBatches = useMemo(() => {
     return batchData.filter((batch) => {
+      const mergedAnomaly = batchAnomalies.get(batch.id) || batch.anomaly;
       if (searchText) {
         const search = searchText.toLowerCase();
         if (
@@ -88,11 +89,11 @@ export default function BatchTracking() {
       if (filters.stayDaysMin && batch.stayDays < parseInt(filters.stayDaysMin)) return false;
       if (filters.stayDaysMax && batch.stayDays > parseInt(filters.stayDaysMax)) return false;
       if (filters.stage && batch.status !== filters.stage) return false;
-      if (filters.anomalyType && batch.anomaly?.type !== filters.anomalyType) return false;
+      if (filters.anomalyType && mergedAnomaly?.type !== filters.anomalyType) return false;
 
       return true;
     });
-  }, [searchText, filters, batchData]);
+  }, [searchText, filters, batchData, batchAnomalies]);
 
   const filteredBatches = useMemo(() => {
     switch (activeTab) {
@@ -105,11 +106,11 @@ export default function BatchTracking() {
       case 'completed':
         return baseFilteredBatches.filter((b) => b.status === 'completed');
       case 'anomaly':
-        return baseFilteredBatches.filter((b) => !!b.anomaly);
+        return baseFilteredBatches.filter((b) => (batchAnomalies.get(b.id) || b.anomaly));
       default:
         return baseFilteredBatches;
     }
-  }, [baseFilteredBatches, activeTab]);
+  }, [baseFilteredBatches, activeTab, batchAnomalies]);
 
   const stats = useMemo(() => {
     const data = baseFilteredBatches;
@@ -118,10 +119,10 @@ export default function BatchTracking() {
       danger: data.filter((b) => b.warningLevel === 'danger').length,
       warning: data.filter((b) => b.warningLevel === 'warning').length,
       completed: data.filter((b) => b.status === 'completed').length,
-      anomaly: data.filter((b) => !!b.anomaly).length,
+      anomaly: data.filter((b) => (batchAnomalies.get(b.id) || b.anomaly)).length,
       total: data.length,
     };
-  }, [baseFilteredBatches]);
+  }, [baseFilteredBatches, batchAnomalies]);
 
   const topStayBatches = useMemo(() => {
     return baseFilteredBatches
@@ -131,14 +132,15 @@ export default function BatchTracking() {
   }, [baseFilteredBatches]);
 
   const anomalySummary = useMemo(() => {
-    const anomalyBatches = baseFilteredBatches.filter((b) => !!b.anomaly);
+    const anomalyBatches = baseFilteredBatches.filter((b) => (batchAnomalies.get(b.id) || b.anomaly));
     const typeMap = new Map<string, { label: string; count: number; stores: Map<string, string> }>();
 
     anomalyBatches.forEach((batch) => {
-      const type = batch.anomaly!.type;
+      const anom = batchAnomalies.get(batch.id) || batch.anomaly;
+      const type = anom!.type;
       if (!typeMap.has(type)) {
         typeMap.set(type, {
-          label: batch.anomaly!.label,
+          label: anom!.label,
           count: 0,
           stores: new Map(),
         });
@@ -177,12 +179,6 @@ export default function BatchTracking() {
     setSelectedStore(null);
     setActiveTab('');
   };
-
-  const handleAnomalyMark = useCallback((batchId: string, anomaly: BatchAnomaly | null) => {
-    setBatchData((prev) =>
-      prev.map((b) => (b.id === batchId ? { ...b, anomaly: anomaly || undefined } : b))
-    );
-  }, []);
 
   const hasActiveFilters =
     filters.storeId ||
@@ -421,7 +417,6 @@ export default function BatchTracking() {
                 <BatchCard
                   key={batch.id}
                   batch={batch}
-                  onAnomalyMark={handleAnomalyMark}
                 />
               ))}
             </div>
@@ -509,9 +504,9 @@ export default function BatchTracking() {
                           <span className="text-sm font-medium text-gray-900 font-mono">
                             {batch.batchNo}
                           </span>
-                          {batch.anomaly && (
+                          {(batchAnomalies.get(batch.id) || batch.anomaly) && (
                             <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">
-                              {batch.anomaly.label}
+                              {(batchAnomalies.get(batch.id) || batch.anomaly)!.label}
                             </span>
                           )}
                         </div>

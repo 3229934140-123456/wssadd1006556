@@ -12,6 +12,11 @@ export const stores: Store[] = [
     completionRate: 90,
     trend: 'up',
     trendValue: 5.2,
+    overdueItems: [
+      { id: 'bj-1', patientName: '张伟', patientId: 'p-bj-1', quantity: 3, dueDate: '2026-06-17', assignee: '北京客服-李明', status: 'processing', note: '已通知，下周一到店' },
+      { id: 'bj-2', patientName: '李娜', patientId: 'p-bj-2', quantity: 2, dueDate: '2026-06-18', assignee: '北京客服-王静', status: 'pending' },
+      { id: 'bj-3', patientName: '刘洋', patientId: 'p-bj-3', quantity: 3, dueDate: '2026-06-16', assignee: '北京客服-李明', status: 'pending', note: '电话未接通，需再次联系' },
+    ],
   },
   {
     id: '2',
@@ -24,6 +29,10 @@ export const stores: Store[] = [
     completionRate: 94.7,
     trend: 'up',
     trendValue: 3.1,
+    overdueItems: [
+      { id: 'sh-1', patientName: '陈曦', patientId: 'p-sh-1', quantity: 2, dueDate: '2026-06-18', assignee: '上海客服-赵敏', status: 'processing', note: '患者出差，延至22号' },
+      { id: 'sh-2', patientName: '孙悦', patientId: 'p-sh-2', quantity: 3, dueDate: '2026-06-17', assignee: '上海客服-周文', status: 'pending' },
+    ],
   },
   {
     id: '3',
@@ -36,6 +45,13 @@ export const stores: Store[] = [
     completionRate: 82.1,
     trend: 'down',
     trendValue: -4.8,
+    overdueItems: [
+      { id: 'gz-1', patientName: '黄强', patientId: 'p-gz-1', quantity: 4, dueDate: '2026-06-15', assignee: '广州客服-林芳', status: 'pending', note: '分盒积压未完成' },
+      { id: 'gz-2', patientName: '周琳', patientId: 'p-gz-2', quantity: 3, dueDate: '2026-06-15', assignee: '广州客服-林芳', status: 'processing' },
+      { id: 'gz-3', patientName: '吴斌', patientId: 'p-gz-3', quantity: 3, dueDate: '2026-06-16', assignee: '广州客服-黄丽', status: 'pending', note: '需联系确认时间' },
+      { id: 'gz-4', patientName: '郑思', patientId: 'p-gz-4', quantity: 2, dueDate: '2026-06-17', assignee: '广州客服-林芳', status: 'completed' },
+      { id: 'gz-5', patientName: '谢峰', patientId: 'p-gz-5', quantity: 3, dueDate: '2026-06-16', assignee: '广州客服-黄丽', status: 'pending' },
+    ],
   },
   {
     id: '4',
@@ -48,6 +64,10 @@ export const stores: Store[] = [
     completionRate: 95.5,
     trend: 'flat',
     trendValue: 0.5,
+    overdueItems: [
+      { id: 'sz-1', patientName: '何平', patientId: 'p-sz-1', quantity: 2, dueDate: '2026-06-18', assignee: '深圳客服-许静', status: 'processing' },
+      { id: 'sz-2', patientName: '罗亮', patientId: 'p-sz-2', quantity: 1, dueDate: '2026-06-19', assignee: '深圳客服-许静', status: 'pending' },
+    ],
   },
   {
     id: '5',
@@ -60,6 +80,12 @@ export const stores: Store[] = [
     completionRate: 81.3,
     trend: 'down',
     trendValue: -6.7,
+    overdueItems: [
+      { id: 'hz-1', patientName: '王芳', patientId: 'p3', quantity: 4, dueDate: '2026-06-14', assignee: '杭州客服-陈雅', status: 'pending', note: '连续2次未到店' },
+      { id: 'hz-2', patientName: '李琴', patientId: 'p-hz-2', quantity: 3, dueDate: '2026-06-15', assignee: '杭州客服-陈雅', status: 'processing' },
+      { id: 'hz-3', patientName: '赵敏', patientId: 'p-hz-3', quantity: 2, dueDate: '2026-06-16', assignee: '杭州客服-钱敏', status: 'pending' },
+      { id: 'hz-4', patientName: '孙军', patientId: 'p-hz-4', quantity: 3, dueDate: '2026-06-17', assignee: '杭州客服-钱敏', status: 'pending' },
+    ],
   },
   {
     id: '6',
@@ -72,6 +98,9 @@ export const stores: Store[] = [
     completionRate: 97.1,
     trend: 'up',
     trendValue: 2.3,
+    overdueItems: [
+      { id: 'cd-1', patientName: '周杰', patientId: 'p-cd-1', quantity: 2, dueDate: '2026-06-19', assignee: '成都客服-吴艳', status: 'pending' },
+    ],
   },
   {
     id: '7',
@@ -84,6 +113,11 @@ export const stores: Store[] = [
     completionRate: 84.7,
     trend: 'down',
     trendValue: -3.2,
+    overdueItems: [
+      { id: 'wh-1', patientName: '郑涛', patientId: 'p-wh-1', quantity: 4, dueDate: '2026-06-15', assignee: '武汉客服-冯洁', status: 'pending', note: '患者未取走' },
+      { id: 'wh-2', patientName: '许明', patientId: 'p-wh-2', quantity: 3, dueDate: '2026-06-16', assignee: '武汉客服-冯洁', status: 'processing' },
+      { id: 'wh-3', patientName: '邓华', patientId: 'p-wh-3', quantity: 3, dueDate: '2026-06-17', assignee: '武汉客服-曹颖', status: 'pending' },
+    ],
   },
   {
     id: '8',
@@ -96,6 +130,9 @@ export const stores: Store[] = [
     completionRate: 95.4,
     trend: 'up',
     trendValue: 1.8,
+    overdueItems: [
+      { id: 'nj-1', patientName: '韩磊', patientId: 'p-nj-1', quantity: 2, dueDate: '2026-06-18', assignee: '南京客服-方芳', status: 'processing' },
+    ],
   },
 ];
 
