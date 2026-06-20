@@ -1,7 +1,7 @@
 import { Store } from '@/types';
 import { ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useStore } from '@/store/useStore';
 
 interface StoreTableProps {
   stores: Store[];
@@ -9,7 +9,7 @@ interface StoreTableProps {
 }
 
 export default function StoreTable({ stores, onStoreClick }: StoreTableProps) {
-  const navigate = useNavigate();
+  const { setSelectedStore } = useStore();
 
   const getRiskLevel = (store: Store) => {
     if (store.completionRate >= 95) return 'normal';
@@ -21,7 +21,7 @@ export default function StoreTable({ stores, onStoreClick }: StoreTableProps) {
     if (onStoreClick) {
       onStoreClick(store);
     } else {
-      navigate(`/patients?storeId=${store.id}`);
+      setSelectedStore(store.id);
     }
   };
 

@@ -7,6 +7,9 @@ import {
   Circle,
   Loader2,
   AlertTriangle,
+  Box,
+  Archive,
+  Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -23,8 +26,49 @@ const statusMap: Record<string, { label: string; className: string }> = {
   completed: { label: '已完成', className: 'bg-green-100 text-green-600' },
 };
 
+const stageConfig = [
+  { key: 'distributed', label: '已分盒', icon: Box, color: 'blue' },
+  { key: 'shelved', label: '已入柜', icon: Archive, color: 'purple' },
+  { key: 'delivered', label: '已发放', icon: Send, color: 'green' },
+];
+
 export default function BatchCard({ batch, onClick }: BatchCardProps) {
   const status = statusMap[batch.status];
+
+  const getStageCount = (key: string) => {
+    switch (key) {
+      case 'distributed':
+        return batch.distributedCount;
+      case 'shelved':
+        return batch.shelvedCount;
+      case 'delivered':
+        return batch.deliveredCount;
+      default:
+        return 0;
+    }
+  };
+
+  const getStageStatus = (index: number) => {
+    const stageIndex = {
+      distributed: 0,
+      shelved: 1,
+      delivered: 2,
+    };
+    const currentStage =
+      batch.status === 'completed'
+        ? 3
+        : batch.status === 'delivering'
+        ? 2
+        : batch.status === 'shelved'
+        ? 1
+        : batch.status === 'distributing'
+        ? 0
+        : -1;
+
+    if (index < currentStage || batch.status === 'completed') return 'completed';
+    if (index === currentStage) return 'in-progress';
+    return 'pending';
+  };
 
   const getStageIcon = (stage: BatchStage) => {
     switch (stage.status) {
@@ -37,15 +81,15 @@ export default function BatchCard({ batch, onClick }: BatchCardProps) {
     }
   };
 
-  const progress =
+  const currentStageIndex =
     batch.status === 'completed'
-      ? 100
+      ? 4
       : batch.status === 'delivering'
-      ? 75
+      ? 3
       : batch.status === 'shelved'
-      ? 50
+      ? 2
       : batch.status === 'distributing'
-      ? 25
+      ? 1
       : 0;
 
   return (
@@ -61,7 +105,7 @@ export default function BatchCard({ batch, onClick }: BatchCardProps) {
         <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-red-500/10 to-transparent -rotate-45 -mr-10 -mt-10"></div>
       )}
 
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between mb-5">
         <div>
           <div className="flex items-center gap-2">
             <h4 className="text-sm font-bold text-gray-900 font-mono tracking-wide">
@@ -92,50 +136,84 @@ export default function BatchCard({ batch, onClick }: BatchCardProps) {
           <div
             className={cn(
               'flex items-center gap-1 px-2.5 py-1 rounded-full',
-              batch.warningLevel === 'danger' &&
-                'bg-red-50 text-red-600',
-              batch.warningLevel === 'warning' &&
-                'bg-orange-50 text-orange-600'
+              batch.warningLevel === 'danger' && 'bg-red-50 text-red-600',
+              batch.warningLevel === 'warning' && 'bg-orange-50 text-orange-600'
             )}
           >
             <AlertTriangle className="w-3.5 h-3.5" />
-            <span className="text-xs font-medium">
-              滞留 {batch.stayDays} 天
-            </span>
+            <span className="text-xs font-medium">滞留 {batch.stayDays} 天</span>
           </div>
         )}
       </div>
 
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-gray-500">处理进度</span>
-          <span className="text-xs font-medium text-gray-700 tabular-nums">
-            {Math.round(
-              (batch.deliveredCount / batch.totalQuantity) * 100
-            )}
-            %
-          </span>
-        </div>
-        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className={cn(
-              'h-full rounded-full transition-all duration-500',
-              batch.warningLevel === 'danger' && 'bg-red-500',
-              batch.warningLevel === 'warning' && 'bg-orange-500',
-              batch.warningLevel === 'normal' && 'bg-green-500'
-            )}
-            style={{
-              width: `${(batch.deliveredCount / batch.totalQuantity) * 100}%`,
-            }}
-          ></div>
-        </div>
-        <div className="flex items-center justify-between mt-2 text-xs text-gray-400">
-          <span>到货 {batch.totalQuantity} 件</span>
-          <span>已发 {batch.deliveredCount} 件</span>
-        </div>
+      <div className="space-y-3">
+        {stageConfig.map((stage, index) => {
+          const StageIcon = stage.icon;
+          const count = getStageCount(stage.key);
+          const stageStatus = getStageStatus(index);
+          const percentage = Math.round((count / batch.totalQuantity) * 100);
+
+          return (
+            <div key={stage.key}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      'w-7 h-7 rounded-lg flex items-center justify-center',
+                      stageStatus === 'completed' && 'bg-green-100 text-green-600',
+                      stageStatus === 'in-progress' && 'bg-blue-100 text-blue-600',
+                      stageStatus === 'pending' && 'bg-gray-100 text-gray-400'
+                    )}
+                  >
+                    <StageIcon className="w-4 h-4" />
+                  </div>
+                  <span
+                    className={cn(
+                      'text-sm font-medium',
+                      stageStatus === 'completed' && 'text-gray-700',
+                      stageStatus === 'in-progress' && 'text-blue-600',
+                      stageStatus === 'pending' && 'text-gray-400'
+                    )}
+                  >
+                    {stage.label}
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <span
+                    className={cn(
+                      'text-base font-bold tabular-nums',
+                      stageStatus === 'completed' && 'text-gray-700',
+                      stageStatus === 'in-progress' && 'text-blue-600',
+                      stageStatus === 'pending' && 'text-gray-300'
+                    )}
+                  >
+                    {count}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    / {batch.totalQuantity} 件
+                  </span>
+                </div>
+              </div>
+              <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all duration-500',
+                    stage.color === 'blue' &&
+                      (stageStatus === 'pending' ? 'bg-gray-200' : 'bg-blue-500'),
+                    stage.color === 'purple' &&
+                      (stageStatus === 'pending' ? 'bg-gray-200' : 'bg-purple-500'),
+                    stage.color === 'green' &&
+                      (stageStatus === 'pending' ? 'bg-gray-200' : 'bg-green-500')
+                  )}
+                  style={{ width: `${percentage}%` }}
+                ></div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      <div className="pt-4 border-t border-gray-50">
+      <div className="mt-5 pt-4 border-t border-gray-50">
         <div className="flex items-center justify-between">
           {batch.stages.map((stage, index) => (
             <div key={index} className="flex flex-col items-center flex-1">

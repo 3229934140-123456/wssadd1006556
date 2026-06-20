@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import BatchCard from '@/components/batch-tracking/BatchCard';
 import { batches } from '@/data/batches';
-import { Batch } from '@/types';
+import { stores } from '@/data/stores';
 import {
   Package,
   AlertTriangle,
@@ -10,13 +10,50 @@ import {
   Truck,
   Search,
   Filter,
+  X,
+  ChevronDown,
 } from 'lucide-react';
 import StatCard from '@/components/common/StatCard';
 import { cn } from '@/lib/utils';
+import { useStore } from '@/store/useStore';
+
+interface Filters {
+  storeId: string;
+  manufacturer: string;
+  stayDaysMin: string;
+  stayDaysMax: string;
+  stage: string;
+}
+
+const manufacturers = ['隐适美', '时代天使', '正雅'];
+const stageOptions = [
+  { value: '', label: '全部阶段' },
+  { value: 'arrived', label: '已到货' },
+  { value: 'distributing', label: '分盒中' },
+  { value: 'shelved', label: '已入柜' },
+  { value: 'delivering', label: '发放中' },
+  { value: 'completed', label: '已完成' },
+];
 
 export default function BatchTracking() {
-  const [activeTab, setActiveTab] = useState<'all' | 'warning' | 'processing' | 'completed'>('all');
+  const { selectedStoreId, setSelectedStore } = useStore();
+  const [showFilter, setShowFilter] = useState(true);
   const [searchText, setSearchText] = useState('');
+  const [filters, setFilters] = useState<Filters>({
+    storeId: '',
+    manufacturer: '',
+    stayDaysMin: '',
+    stayDaysMax: '',
+    stage: '',
+  });
+
+  useEffect(() => {
+    if (selectedStoreId) {
+      setFilters((prev) => ({ ...prev, storeId: selectedStoreId }));
+    } else {
+      setFilters((prev) => ({ ...prev, storeId: '' }));
+    }
+  }, [selectedStoreId]);
 
   const filteredBatches = useMemo(() => {
     return batches.filter((batch) => {
@@ -31,30 +68,65 @@ export default function BatchTracking() {
         }
       }
 
-      switch (activeTab) {
-        case 'warning':
-          return batch.warningLevel === 'danger' || batch.warningLevel === 'warning';
-        case 'processing':
-          return batch.status !== 'completed';
-        case 'completed':
-          return batch.status === 'completed';
-        default:
-          return true;
-      }
+      if (filters.storeId && batch.storeId !== filters.storeId) return false;
+
+      if (filters.manufacturer && batch.manufacturer !== filters.manufacturer)
+        return false;
+
+      if (filters.stayDaysMin && batch.stayDays < parseInt(filters.stayDaysMin))
+        return false;
+
+      if (filters.stayDaysMax && batch.stayDays > parseInt(filters.stayDaysMax))
+        return false;
+
+      if (filters.stage && batch.status !== filters.stage) return false;
+
+      return true;
     });
-  }, [activeTab, searchText]);
+  }, [searchText, filters]);
 
-  const dangerCount = batches.filter((b) => b.warningLevel === 'danger').length;
-  const warningCount = batches.filter((b) => b.warningLevel === 'warning').length;
-  const processingCount = batches.filter((b) => b.status !== 'completed').length;
-  const completedCount = batches.filter((b) => b.status === 'completed').length;
+  const stats = useMemo(() => {
+    const data = filteredBatches;
+    return {
+      processing: data.filter((b) => b.status !== 'completed').length,
+      danger: data.filter((b) => b.warningLevel === 'danger').length,
+      warning: data.filter((b) => b.warningLevel === 'warning').length,
+      completed: data.filter((b) => b.status === 'completed').length,
+      total: data.length,
+    };
+  }, [filteredBatches]);
 
-  const tabs = [
-    { key: 'all', label: '全部批次', count: batches.length },
-    { key: 'warning', label: '待关注', count: dangerCount + warningCount },
-    { key: 'processing', label: '处理中', count: processingCount },
-    { key: 'completed', label: '已完成', count: completedCount },
-  ];
+  const topStayBatches = useMemo(() => {
+    return filteredBatches
+      .filter((b) => b.stayDays > 0 && b.status !== 'completed')
+      .sort((a, b) => b.stayDays - a.stayDays)
+      .slice(0, 5);
+  }, [filteredBatches]);
+
+  const handleFilterChange = (key: keyof Filters, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+    if (key === 'storeId') {
+      setSelectedStore(value || null);
+    }
+  };
+
+  const handleReset = () => {
+    setFilters({
+      storeId: '',
+      manufacturer: '',
+      stayDaysMin: '',
+      stayDaysMax: '',
+      stage: '',
+    });
+    setSelectedStore(null);
+  };
+
+  const hasActiveFilters =
+    filters.storeId ||
+    filters.manufacturer ||
+    filters.stayDaysMin ||
+    filters.stayDaysMax ||
+    filters.stage;
 
   return (
     <div className="space-y-6">
@@ -76,9 +148,22 @@ export default function BatchTracking() {
               className="w-64 h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
             />
           </div>
-          <button className="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2">
+          <button
+            onClick={() => setShowFilter(!showFilter)}
+            className={cn(
+              'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
+              showFilter || hasActiveFilters
+                ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                : 'text-gray-600 bg-white border border-gray-200 hover:bg-gray-50'
+            )}
+          >
             <Filter className="w-4 h-4" />
             筛选
+            {hasActiveFilters && (
+              <span className="w-5 h-5 bg-blue-500 text-white rounded-full text-xs flex items-center justify-center">
+                {Object.values(filters).filter(Boolean).length}
+              </span>
+            )}
           </button>
           <button className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
             导出报表
@@ -86,70 +171,203 @@ export default function BatchTracking() {
         </div>
       </div>
 
+      {showFilter && (
+        <div className="bg-white rounded-xl border border-gray-100 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-500" />
+              <span className="text-sm font-medium text-gray-700">筛选条件</span>
+            </div>
+            {hasActiveFilters && (
+              <button
+                onClick={handleReset}
+                className="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1"
+              >
+                <X className="w-3 h-3" />
+                重置
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-5 gap-4">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">
+                所属门店
+              </label>
+              <select
+                value={filters.storeId}
+                onChange={(e) => handleFilterChange('storeId', e.target.value)}
+                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
+              >
+                <option value="">全部门店</option>
+                {stores.map((store) => (
+                  <option key={store.id} value={store.id}>
+                    {store.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">
+                厂家品牌
+              </label>
+              <select
+                value={filters.manufacturer}
+                onChange={(e) =>
+                  handleFilterChange('manufacturer', e.target.value)
+                }
+                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
+              >
+                <option value="">全部厂家</option>
+                {manufacturers.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">
+                处理阶段
+              </label>
+              <select
+                value={filters.stage}
+                onChange={(e) => handleFilterChange('stage', e.target.value)}
+                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
+              >
+                {stageOptions.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">
+                滞留天数
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  placeholder="最小"
+                  value={filters.stayDaysMin}
+                  onChange={(e) =>
+                    handleFilterChange('stayDaysMin', e.target.value)
+                  }
+                  className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
+                />
+                <span className="text-gray-400 text-xs">-</span>
+                <input
+                  type="number"
+                  placeholder="最大"
+                  value={filters.stayDaysMax}
+                  onChange={(e) =>
+                    handleFilterChange('stayDaysMax', e.target.value)
+                  }
+                  className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={handleReset}
+                className="w-full h-9 px-4 flex items-center justify-center gap-1.5 text-sm text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+                重置筛选
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-4 gap-5">
         <StatCard
           title="在途批次"
-          value={processingCount}
+          value={stats.processing}
           unit="批"
           icon={<Truck className="w-6 h-6" />}
           color="blue"
-          trend="up"
-          trendValue={12.5}
         />
         <StatCard
           title="红色预警"
-          value={dangerCount}
+          value={stats.danger}
           unit="批"
           icon={<AlertTriangle className="w-6 h-6" />}
           color="red"
-          trend="up"
-          trendValue={25}
         />
         <StatCard
           title="黄色预警"
-          value={warningCount}
+          value={stats.warning}
           unit="批"
           icon={<Clock className="w-6 h-6" />}
           color="orange"
-          trend="down"
-          trendValue={-10}
         />
         <StatCard
-          title="本周完成"
-          value={completedCount}
+          title="已完成"
+          value={stats.completed}
           unit="批"
           icon={<CheckCircle2 className="w-6 h-6" />}
           color="green"
-          trend="up"
-          trendValue={8.3}
         />
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 p-1.5 inline-flex">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key as typeof activeTab)}
-            className={cn(
-              'px-5 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2',
-              activeTab === tab.key
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            )}
-          >
-            {tab.label}
-            <span
+        {[
+          { key: '', label: '全部批次', count: stats.total },
+          {
+            key: 'warning',
+            label: '待关注',
+            count: stats.danger + stats.warning,
+          },
+          { key: 'processing', label: '处理中', count: stats.processing },
+          { key: 'completed', label: '已完成', count: stats.completed },
+        ].map((tab) => {
+          const isActive =
+            (tab.key === '' && !filters.stage) ||
+            (tab.key === 'warning' &&
+              (filters.stage === '' || filters.stage === 'warning')) ||
+            (tab.key === 'processing' &&
+              ['arrived', 'distributing', 'shelved', 'delivering'].includes(
+                filters.stage
+              )) ||
+            (tab.key === 'completed' && filters.stage === 'completed');
+
+          return (
+            <button
+              key={tab.key}
+              onClick={() => {
+                if (tab.key === 'warning') {
+                  setFilters((prev) => ({ ...prev, stage: '' }));
+                } else {
+                  setFilters((prev) => ({ ...prev, stage: tab.key }));
+                }
+              }}
               className={cn(
-                'px-1.5 py-0.5 text-xs font-medium rounded-md',
-                activeTab === tab.key
-                  ? 'bg-white/20 text-white'
-                  : 'bg-gray-100 text-gray-500'
+                'px-5 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2',
+                isActive
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               )}
             >
-              {tab.count}
-            </span>
-          </button>
-        ))}
+              {tab.label}
+              <span
+                className={cn(
+                  'px-1.5 py-0.5 text-xs font-medium rounded-md',
+                  isActive
+                    ? 'bg-white/20 text-white'
+                    : 'bg-gray-100 text-gray-500'
+                )}
+              >
+                {tab.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {filteredBatches.length > 0 ? (
@@ -162,19 +380,29 @@ export default function BatchTracking() {
         <div className="bg-white rounded-xl border border-gray-100 p-16 text-center">
           <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">没有找到匹配的批次</p>
+          {hasActiveFilters && (
+            <button
+              onClick={handleReset}
+              className="mt-3 text-sm text-blue-600 hover:text-blue-700"
+            >
+              重置筛选条件
+            </button>
+          )}
         </div>
       )}
 
       <div className="bg-white rounded-xl border border-gray-100 p-6">
-        <h3 className="text-base font-semibold text-gray-900 mb-4">
-          滞留批次排行
-        </h3>
-        <div className="space-y-3">
-          {batches
-            .filter((b) => b.stayDays > 0 && b.status !== 'completed')
-            .sort((a, b) => b.stayDays - a.stayDays)
-            .slice(0, 5)
-            .map((batch, index) => (
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold text-gray-900">
+            滞留批次排行
+          </h3>
+          <span className="text-xs text-gray-400">
+            基于当前筛选结果
+          </span>
+        </div>
+        {topStayBatches.length > 0 ? (
+          <div className="space-y-3">
+            {topStayBatches.map((batch, index) => (
               <div
                 key={batch.id}
                 className="flex items-center gap-4 p-3 bg-gray-50/50 rounded-lg hover:bg-gray-50 transition-colors"
@@ -220,7 +448,13 @@ export default function BatchTracking() {
                 </div>
               </div>
             ))}
-        </div>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-400">
+            <Clock className="w-10 h-10 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">当前筛选下无滞留批次</p>
+          </div>
+        )}
       </div>
     </div>
   );

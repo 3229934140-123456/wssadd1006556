@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -8,8 +8,13 @@ import {
   Search,
   ChevronDown,
   User,
+  MapPin,
+  X,
+  Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useStore } from '@/store/useStore';
+import { stores } from '@/data/stores';
 
 interface NavItem {
   key: string;
@@ -28,8 +33,26 @@ export default function Header() {
   const location = useLocation();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showStoreDropdown, setShowStoreDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const { selectedStore, setSelectedStore, clearSelectedStore } = useStore();
 
   const currentPath = location.pathname;
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowStoreDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
@@ -70,15 +93,96 @@ export default function Header() {
               );
             })}
           </nav>
+
+          {selectedStore && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
+              <MapPin className="w-4 h-4 text-blue-600" />
+              <span className="text-sm font-medium text-blue-700">
+                {selectedStore.name}
+              </span>
+              <button
+                onClick={clearSelectedStore}
+                className="ml-1 w-5 h-5 rounded hover:bg-blue-100 flex items-center justify-center text-blue-400 hover:text-blue-600 transition-colors"
+                title="查看全部门店"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-4">
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setShowStoreDropdown(!showStoreDropdown)}
+              className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-sm text-gray-600 transition-colors"
+            >
+              <MapPin className="w-4 h-4" />
+              <span>{selectedStore ? selectedStore.name : '全部门店'}</span>
+              <ChevronDown
+                className={cn(
+                  'w-4 h-4 transition-transform',
+                  showStoreDropdown && 'rotate-180'
+                )}
+              />
+            </button>
+
+            {showStoreDropdown && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-50">
+                <div className="px-3 py-2 border-b border-gray-50">
+                  <p className="text-xs text-gray-400">选择门店</p>
+                </div>
+                <div className="max-h-72 overflow-y-auto py-1">
+                  <button
+                    onClick={() => {
+                      clearSelectedStore();
+                      setShowStoreDropdown(false);
+                    }}
+                    className={cn(
+                      'w-full px-3 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 transition-colors',
+                      !selectedStore && 'text-blue-600 bg-blue-50'
+                    )}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Building2 className="w-4 h-4" />
+                      全部门店
+                    </span>
+                    {!selectedStore && <Check className="w-4 h-4" />}
+                  </button>
+                  <div className="h-px bg-gray-50 mx-3 my-1"></div>
+                  {stores.map((store) => (
+                    <button
+                      key={store.id}
+                      onClick={() => {
+                        setSelectedStore(store.id);
+                        setShowStoreDropdown(false);
+                      }}
+                      className={cn(
+                        'w-full px-3 py-2 text-left text-sm flex items-center justify-between hover:bg-gray-50 transition-colors',
+                        selectedStore?.id === store.id &&
+                          'text-blue-600 bg-blue-50'
+                      )}
+                    >
+                      <div>
+                        <p className="font-medium">{store.name}</p>
+                        <p className="text-xs text-gray-400">{store.city}</p>
+                      </div>
+                      {selectedStore?.id === store.id && (
+                        <Check className="w-4 h-4" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="搜索门店、患者、批次..."
-              className="w-64 h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-200 focus:ring-2 focus:ring-blue-50 transition-all duration-200"
+              placeholder="搜索患者、批次..."
+              className="w-56 h-9 pl-9 pr-4 bg-gray-50 border border-transparent rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-200 focus:ring-2 focus:ring-blue-50 transition-all duration-200"
             />
           </div>
 
