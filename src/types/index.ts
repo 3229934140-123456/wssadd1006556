@@ -55,6 +55,14 @@ export interface Batch {
   stayDays: number;
   warningLevel: 'normal' | 'warning' | 'danger';
   stages: BatchStage[];
+  anomaly?: BatchAnomaly;
+}
+
+export interface BatchAnomaly {
+  type: 'stuck_distributing' | 'stuck_shelving' | 'stuck_notifying' | 'patient_not_picked_up' | '';
+  label: string;
+  reportedAt: string;
+  reportedBy: string;
 }
 
 export interface BatchStage {

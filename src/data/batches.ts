@@ -15,6 +15,12 @@ export const batches: Batch[] = [
     deliveredCount: 0,
     stayDays: 5,
     warningLevel: 'warning',
+    anomaly: {
+      type: 'stuck_distributing',
+      label: '分盒卡顿',
+      reportedAt: '2026-06-18',
+      reportedBy: '广州天河店',
+    },
     stages: [
       { name: '厂家到货', status: 'completed', date: '2026-06-15', duration: 0 },
       { name: '分盒处理', status: 'in-progress', date: '2026-06-16', duration: 5 },
@@ -36,6 +42,12 @@ export const batches: Batch[] = [
     deliveredCount: 0,
     stayDays: 10,
     warningLevel: 'danger',
+    anomaly: {
+      type: 'stuck_notifying',
+      label: '通知未达',
+      reportedAt: '2026-06-16',
+      reportedBy: '杭州西湖店',
+    },
     stages: [
       { name: '厂家到货', status: 'completed', date: '2026-06-10', duration: 0 },
       { name: '分盒处理', status: 'completed', date: '2026-06-11', duration: 1 },
@@ -78,6 +90,12 @@ export const batches: Batch[] = [
     deliveredCount: 15,
     stayDays: 8,
     warningLevel: 'warning',
+    anomaly: {
+      type: 'patient_not_picked_up',
+      label: '患者未取走',
+      reportedAt: '2026-06-17',
+      reportedBy: '武汉江汉店',
+    },
     stages: [
       { name: '厂家到货', status: 'completed', date: '2026-06-12', duration: 0 },
       { name: '分盒处理', status: 'completed', date: '2026-06-13', duration: 1 },
@@ -99,6 +117,12 @@ export const batches: Batch[] = [
     deliveredCount: 0,
     stayDays: 3,
     warningLevel: 'normal',
+    anomaly: {
+      type: 'stuck_shelving',
+      label: '入柜延迟',
+      reportedAt: '2026-06-19',
+      reportedBy: '上海浦东店',
+    },
     stages: [
       { name: '厂家到货', status: 'completed', date: '2026-06-17', duration: 0 },
       { name: '分盒处理', status: 'in-progress', date: '2026-06-18', duration: 2 },

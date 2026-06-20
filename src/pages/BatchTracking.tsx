@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import BatchCard from '@/components/batch-tracking/BatchCard';
-import { batches } from '@/data/batches';
+import { batches as initialBatches } from '@/data/batches';
 import { stores } from '@/data/stores';
+import { Batch, BatchAnomaly } from '@/types';
 import {
   Package,
   AlertTriangle,
@@ -11,7 +12,8 @@ import {
   Search,
   Filter,
   X,
-  ChevronDown,
+  Flag,
+  MapPin,
 } from 'lucide-react';
 import StatCard from '@/components/common/StatCard';
 import { cn } from '@/lib/utils';
@@ -23,6 +25,7 @@ interface Filters {
   stayDaysMin: string;
   stayDaysMax: string;
   stage: string;
+  anomalyType: string;
 }
 
 const manufacturers = ['隐适美', '时代天使', '正雅'];
@@ -34,17 +37,29 @@ const stageOptions = [
   { value: 'delivering', label: '发放中' },
   { value: 'completed', label: '已完成' },
 ];
+const anomalyTypeOptions = [
+  { value: '', label: '全部异常' },
+  { value: 'stuck_distributing', label: '分盒卡顿' },
+  { value: 'stuck_shelving', label: '入柜延迟' },
+  { value: 'stuck_notifying', label: '通知未达' },
+  { value: 'patient_not_picked_up', label: '患者未取走' },
+];
+
+type TabKey = '' | 'warning' | 'processing' | 'completed' | 'anomaly';
 
 export default function BatchTracking() {
   const { selectedStoreId, setSelectedStore } = useStore();
   const [showFilter, setShowFilter] = useState(true);
   const [searchText, setSearchText] = useState('');
+  const [activeTab, setActiveTab] = useState<TabKey>('');
+  const [batchData, setBatchData] = useState<Batch[]>(initialBatches);
   const [filters, setFilters] = useState<Filters>({
     storeId: '',
     manufacturer: '',
     stayDaysMin: '',
     stayDaysMax: '',
     stage: '',
+    anomalyType: '',
   });
 
   useEffect(() => {
@@ -55,8 +70,8 @@ export default function BatchTracking() {
     }
   }, [selectedStoreId]);
 
-  const filteredBatches = useMemo(() => {
-    return batches.filter((batch) => {
+  const baseFilteredBatches = useMemo(() => {
+    return batchData.filter((batch) => {
       if (searchText) {
         const search = searchText.toLowerCase();
         if (
@@ -69,39 +84,79 @@ export default function BatchTracking() {
       }
 
       if (filters.storeId && batch.storeId !== filters.storeId) return false;
-
-      if (filters.manufacturer && batch.manufacturer !== filters.manufacturer)
-        return false;
-
-      if (filters.stayDaysMin && batch.stayDays < parseInt(filters.stayDaysMin))
-        return false;
-
-      if (filters.stayDaysMax && batch.stayDays > parseInt(filters.stayDaysMax))
-        return false;
-
+      if (filters.manufacturer && batch.manufacturer !== filters.manufacturer) return false;
+      if (filters.stayDaysMin && batch.stayDays < parseInt(filters.stayDaysMin)) return false;
+      if (filters.stayDaysMax && batch.stayDays > parseInt(filters.stayDaysMax)) return false;
       if (filters.stage && batch.status !== filters.stage) return false;
+      if (filters.anomalyType && batch.anomaly?.type !== filters.anomalyType) return false;
 
       return true;
     });
-  }, [searchText, filters]);
+  }, [searchText, filters, batchData]);
+
+  const filteredBatches = useMemo(() => {
+    switch (activeTab) {
+      case 'processing':
+        return baseFilteredBatches.filter((b) => b.status !== 'completed');
+      case 'warning':
+        return baseFilteredBatches.filter(
+          (b) => b.warningLevel === 'danger' || b.warningLevel === 'warning'
+        );
+      case 'completed':
+        return baseFilteredBatches.filter((b) => b.status === 'completed');
+      case 'anomaly':
+        return baseFilteredBatches.filter((b) => !!b.anomaly);
+      default:
+        return baseFilteredBatches;
+    }
+  }, [baseFilteredBatches, activeTab]);
 
   const stats = useMemo(() => {
-    const data = filteredBatches;
+    const data = baseFilteredBatches;
     return {
       processing: data.filter((b) => b.status !== 'completed').length,
       danger: data.filter((b) => b.warningLevel === 'danger').length,
       warning: data.filter((b) => b.warningLevel === 'warning').length,
       completed: data.filter((b) => b.status === 'completed').length,
+      anomaly: data.filter((b) => !!b.anomaly).length,
       total: data.length,
     };
-  }, [filteredBatches]);
+  }, [baseFilteredBatches]);
 
   const topStayBatches = useMemo(() => {
-    return filteredBatches
+    return baseFilteredBatches
       .filter((b) => b.stayDays > 0 && b.status !== 'completed')
       .sort((a, b) => b.stayDays - a.stayDays)
       .slice(0, 5);
-  }, [filteredBatches]);
+  }, [baseFilteredBatches]);
+
+  const anomalySummary = useMemo(() => {
+    const anomalyBatches = baseFilteredBatches.filter((b) => !!b.anomaly);
+    const typeMap = new Map<string, { label: string; count: number; stores: Map<string, string> }>();
+
+    anomalyBatches.forEach((batch) => {
+      const type = batch.anomaly!.type;
+      if (!typeMap.has(type)) {
+        typeMap.set(type, {
+          label: batch.anomaly!.label,
+          count: 0,
+          stores: new Map(),
+        });
+      }
+      const entry = typeMap.get(type)!;
+      entry.count++;
+      entry.stores.set(batch.storeId, batch.storeName);
+    });
+
+    return Array.from(typeMap.entries())
+      .map(([type, data]) => ({
+        type,
+        label: data.label,
+        count: data.count,
+        storeNames: Array.from(data.stores.values()),
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [baseFilteredBatches]);
 
   const handleFilterChange = (key: keyof Filters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -117,16 +172,33 @@ export default function BatchTracking() {
       stayDaysMin: '',
       stayDaysMax: '',
       stage: '',
+      anomalyType: '',
     });
     setSelectedStore(null);
+    setActiveTab('');
   };
+
+  const handleAnomalyMark = useCallback((batchId: string, anomaly: BatchAnomaly | null) => {
+    setBatchData((prev) =>
+      prev.map((b) => (b.id === batchId ? { ...b, anomaly: anomaly || undefined } : b))
+    );
+  }, []);
 
   const hasActiveFilters =
     filters.storeId ||
     filters.manufacturer ||
     filters.stayDaysMin ||
     filters.stayDaysMax ||
-    filters.stage;
+    filters.stage ||
+    filters.anomalyType;
+
+  const tabs = [
+    { key: '' as TabKey, label: '全部批次', count: stats.total },
+    { key: 'processing' as TabKey, label: '处理中', count: stats.processing },
+    { key: 'warning' as TabKey, label: '待关注', count: stats.danger + stats.warning },
+    { key: 'anomaly' as TabKey, label: '异常标记', count: stats.anomaly },
+    { key: 'completed' as TabKey, label: '已完成', count: stats.completed },
+  ];
 
   return (
     <div className="space-y-6">
@@ -189,11 +261,9 @@ export default function BatchTracking() {
             )}
           </div>
 
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-6 gap-4">
             <div>
-              <label className="block text-xs text-gray-500 mb-1.5">
-                所属门店
-              </label>
+              <label className="block text-xs text-gray-500 mb-1.5">所属门店</label>
               <select
                 value={filters.storeId}
                 onChange={(e) => handleFilterChange('storeId', e.target.value)}
@@ -209,54 +279,53 @@ export default function BatchTracking() {
             </div>
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1.5">
-                厂家品牌
-              </label>
+              <label className="block text-xs text-gray-500 mb-1.5">厂家品牌</label>
               <select
                 value={filters.manufacturer}
-                onChange={(e) =>
-                  handleFilterChange('manufacturer', e.target.value)
-                }
+                onChange={(e) => handleFilterChange('manufacturer', e.target.value)}
                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
               >
                 <option value="">全部厂家</option>
                 {manufacturers.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
+                  <option key={m} value={m}>{m}</option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1.5">
-                处理阶段
-              </label>
+              <label className="block text-xs text-gray-500 mb-1.5">处理阶段</label>
               <select
                 value={filters.stage}
                 onChange={(e) => handleFilterChange('stage', e.target.value)}
                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
               >
                 {stageOptions.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
+                  <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1.5">
-                滞留天数
-              </label>
+              <label className="block text-xs text-gray-500 mb-1.5">异常类型</label>
+              <select
+                value={filters.anomalyType}
+                onChange={(e) => handleFilterChange('anomalyType', e.target.value)}
+                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
+              >
+                {anomalyTypeOptions.map((a) => (
+                  <option key={a.value} value={a.value}>{a.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-500 mb-1.5">滞留天数</label>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
                   placeholder="最小"
                   value={filters.stayDaysMin}
-                  onChange={(e) =>
-                    handleFilterChange('stayDaysMin', e.target.value)
-                  }
+                  onChange={(e) => handleFilterChange('stayDaysMin', e.target.value)}
                   className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
                 />
                 <span className="text-gray-400 text-xs">-</span>
@@ -264,9 +333,7 @@ export default function BatchTracking() {
                   type="number"
                   placeholder="最大"
                   value={filters.stayDaysMax}
-                  onChange={(e) =>
-                    handleFilterChange('stayDaysMax', e.target.value)
-                  }
+                  onChange={(e) => handleFilterChange('stayDaysMax', e.target.value)}
                   className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-blue-300 focus:ring-2 focus:ring-blue-50 transition-all"
                 />
               </div>
@@ -301,10 +368,10 @@ export default function BatchTracking() {
           color="red"
         />
         <StatCard
-          title="黄色预警"
-          value={stats.warning}
+          title="异常标记"
+          value={stats.anomaly}
           unit="批"
-          icon={<Clock className="w-6 h-6" />}
+          icon={<Flag className="w-6 h-6" />}
           color="orange"
         />
         <StatCard
@@ -317,36 +384,12 @@ export default function BatchTracking() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 p-1.5 inline-flex">
-        {[
-          { key: '', label: '全部批次', count: stats.total },
-          {
-            key: 'warning',
-            label: '待关注',
-            count: stats.danger + stats.warning,
-          },
-          { key: 'processing', label: '处理中', count: stats.processing },
-          { key: 'completed', label: '已完成', count: stats.completed },
-        ].map((tab) => {
-          const isActive =
-            (tab.key === '' && !filters.stage) ||
-            (tab.key === 'warning' &&
-              (filters.stage === '' || filters.stage === 'warning')) ||
-            (tab.key === 'processing' &&
-              ['arrived', 'distributing', 'shelved', 'delivering'].includes(
-                filters.stage
-              )) ||
-            (tab.key === 'completed' && filters.stage === 'completed');
-
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.key;
           return (
             <button
               key={tab.key}
-              onClick={() => {
-                if (tab.key === 'warning') {
-                  setFilters((prev) => ({ ...prev, stage: '' }));
-                } else {
-                  setFilters((prev) => ({ ...prev, stage: tab.key }));
-                }
-              }}
+              onClick={() => setActiveTab(tab.key)}
               className={cn(
                 'px-5 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2',
                 isActive
@@ -370,89 +413,188 @@ export default function BatchTracking() {
         })}
       </div>
 
-      {filteredBatches.length > 0 ? (
-        <div className="grid grid-cols-2 gap-5">
-          {filteredBatches.map((batch) => (
-            <BatchCard key={batch.id} batch={batch} />
-          ))}
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-gray-100 p-16 text-center">
-          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">没有找到匹配的批次</p>
-          {hasActiveFilters && (
-            <button
-              onClick={handleReset}
-              className="mt-3 text-sm text-blue-600 hover:text-blue-700"
-            >
-              重置筛选条件
-            </button>
+      <div className="grid grid-cols-3 gap-6">
+        <div className={anomalySummary.length > 0 ? 'col-span-2' : 'col-span-3'}>
+          {filteredBatches.length > 0 ? (
+            <div className="grid grid-cols-2 gap-5">
+              {filteredBatches.map((batch) => (
+                <BatchCard
+                  key={batch.id}
+                  batch={batch}
+                  onAnomalyMark={handleAnomalyMark}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-100 p-16 text-center">
+              <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">没有找到匹配的批次</p>
+              {hasActiveFilters && (
+                <button
+                  onClick={handleReset}
+                  className="mt-3 text-sm text-blue-600 hover:text-blue-700"
+                >
+                  重置筛选条件
+                </button>
+              )}
+            </div>
           )}
         </div>
-      )}
 
-      <div className="bg-white rounded-xl border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-semibold text-gray-900">
-            滞留批次排行
-          </h3>
-          <span className="text-xs text-gray-400">
-            基于当前筛选结果
-          </span>
-        </div>
-        {topStayBatches.length > 0 ? (
-          <div className="space-y-3">
-            {topStayBatches.map((batch, index) => (
-              <div
-                key={batch.id}
-                className="flex items-center gap-4 p-3 bg-gray-50/50 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                <span
-                  className={cn(
-                    'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white',
-                    index === 0 && 'bg-red-500',
-                    index === 1 && 'bg-orange-500',
-                    index === 2 && 'bg-yellow-500',
-                    index >= 3 && 'bg-gray-400'
-                  )}
-                >
-                  {index + 1}
-                </span>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-900 font-mono">
-                      {batch.batchNo}
+        {anomalySummary.length > 0 && (
+          <div className="space-y-5">
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold text-gray-900">异常原因汇总</h3>
+                <span className="text-xs text-gray-400">基于当前筛选</span>
+              </div>
+              <div className="space-y-3">
+                {anomalySummary.map((item) => (
+                  <div
+                    key={item.type}
+                    className="p-3 bg-amber-50/50 rounded-lg border border-amber-100/50"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Flag className="w-4 h-4 text-amber-500" />
+                        <span className="text-sm font-medium text-gray-900">
+                          {item.label}
+                        </span>
+                      </div>
+                      <span className="text-lg font-bold text-amber-600 tabular-nums">
+                        {item.count}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <MapPin className="w-3 h-3 text-gray-400" />
+                      {item.storeNames.map((name, i) => (
+                        <span
+                          key={i}
+                          className="text-xs bg-white px-2 py-0.5 rounded-md border border-gray-100 text-gray-600"
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold text-gray-900">滞留批次排行</h3>
+                <span className="text-xs text-gray-400">基于当前筛选结果</span>
+              </div>
+              {topStayBatches.length > 0 ? (
+                <div className="space-y-3">
+                  {topStayBatches.map((batch, index) => (
+                    <div
+                      key={batch.id}
+                      className="flex items-center gap-3 p-2.5 bg-gray-50/50 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <span
+                        className={cn(
+                          'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white',
+                          index === 0 && 'bg-red-500',
+                          index === 1 && 'bg-orange-500',
+                          index === 2 && 'bg-yellow-500',
+                          index >= 3 && 'bg-gray-400'
+                        )}
+                      >
+                        {index + 1}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900 font-mono">
+                            {batch.batchNo}
+                          </span>
+                          {batch.anomaly && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">
+                              {batch.anomaly.label}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {batch.storeName} · {batch.manufacturer}
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          'text-sm font-bold tabular-nums',
+                          batch.stayDays >= 7 && 'text-red-600',
+                          batch.stayDays >= 3 && batch.stayDays < 7 && 'text-orange-600',
+                          batch.stayDays < 3 && 'text-gray-600'
+                        )}
+                      >
+                        {batch.stayDays}天
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-400">
+                  <Clock className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">当前筛选下无滞留批次</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {anomalySummary.length === 0 && topStayBatches.length > 0 && (
+          <div className="space-y-5">
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold text-gray-900">滞留批次排行</h3>
+                <span className="text-xs text-gray-400">基于当前筛选结果</span>
+              </div>
+              <div className="space-y-3">
+                {topStayBatches.map((batch, index) => (
+                  <div
+                    key={batch.id}
+                    className="flex items-center gap-3 p-2.5 bg-gray-50/50 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <span
+                      className={cn(
+                        'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white',
+                        index === 0 && 'bg-red-500',
+                        index === 1 && 'bg-orange-500',
+                        index === 2 && 'bg-yellow-500',
+                        index >= 3 && 'bg-gray-400'
+                      )}
+                    >
+                      {index + 1}
                     </span>
-                    <span className="text-xs text-gray-400">
-                      {batch.storeName}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900 font-mono">
+                          {batch.batchNo}
+                        </span>
+                        {batch.anomaly && (
+                          <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">
+                            {batch.anomaly.label}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {batch.storeName} · {batch.manufacturer}
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        'text-sm font-bold tabular-nums',
+                        batch.stayDays >= 7 && 'text-red-600',
+                        batch.stayDays >= 3 && batch.stayDays < 7 && 'text-orange-600',
+                        batch.stayDays < 3 && 'text-gray-600'
+                      )}
+                    >
+                      {batch.stayDays}天
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {batch.manufacturer} · {batch.arrivalDate} 到货
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p
-                    className={cn(
-                      'text-sm font-bold tabular-nums',
-                      batch.stayDays >= 7 && 'text-red-600',
-                      batch.stayDays >= 3 &&
-                        batch.stayDays < 7 &&
-                        'text-orange-600',
-                      batch.stayDays < 3 && 'text-gray-600'
-                    )}
-                  >
-                    {batch.stayDays} 天
-                  </p>
-                  <p className="text-xs text-gray-400">滞留</p>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-gray-400">
-            <Clock className="w-10 h-10 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">当前筛选下无滞留批次</p>
+            </div>
           </div>
         )}
       </div>
